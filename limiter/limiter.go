@@ -32,36 +32,37 @@ func NewRateLimiter() *RateLimiter {
 	}
 }
 
+func (rl *RateLimiter) processRequest(w http.ResponseWriter, key, keyType string) bool {
+	if rl.isBlocked(key) {
+		http.Error(w, "you have reached the maximum number of requests or actions allowed within a certain time frame", http.StatusTooManyRequests)
+		return false
+	}
+	if rl.checkRateLimit(key, keyType) {
+		rl.block(key, keyType)
+		http.Error(w, "you have reached the maximum number of requests or actions allowed within a certain time frame", http.StatusTooManyRequests)
+		return false
+	}
+	return true
+}
+
 func (rl *RateLimiter) LimitHandler(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		config, err := configs.LoadConfig(".")
-		if err != nil {
-			panic(err)
-		}
+		config, _ := configs.LoadConfig(".")
 
 		apiKey := r.Header.Get("API_KEY")
 		ip := strings.Split(r.RemoteAddr, ":")[0]
 
+		var key, keyType string
 		if apiKey == config.TokenAllowed {
-			if rl.isBlocked("token:" + apiKey) {
-				http.Error(w, "you have reached the maximum number of requests or actions allowed within a certain time frame", http.StatusTooManyRequests)
-				return
-			}
-			if rl.checkRateLimit("token:"+apiKey, "token") {
-				rl.block("token:"+apiKey, "token")
-				http.Error(w, "you have reached the maximum number of requests or actions allowed within a certain time frame", http.StatusTooManyRequests)
-				return
-			}
+			key = "token:" + apiKey
+			keyType = "token"
 		} else {
-			if rl.isBlocked("ip:" + ip) {
-				http.Error(w, "you have reached the maximum number of requests or actions allowed within a certain time frame", http.StatusTooManyRequests)
-				return
-			}
-			if rl.checkRateLimit("ip:"+ip, "ip") {
-				rl.block("ip:"+ip, "ip")
-				http.Error(w, "you have reached the maximum number of requests or actions allowed within a certain time frame", http.StatusTooManyRequests)
-				return
-			}
+			key = "ip:" + ip
+			keyType = "ip"
+		}
+
+		if !rl.processRequest(w, key, keyType) {
+			return // Se a função retornar false, a requisição é interrompida
 		}
 
 		next.ServeHTTP(w, r)
@@ -99,7 +100,7 @@ func (rl *RateLimiter) checkRateLimit(key string, tokenOrIp string) bool {
 		requests = config.RequestsByToken
 	}
 
-	if count > requests {
+	if count >= requests {
 		return true
 	}
 

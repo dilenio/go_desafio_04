@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"net/http"
 
 	"github.com/dilenio/desafio04/cmd/configs"
@@ -26,6 +27,7 @@ func main() {
 	router.Get("/", func(w http.ResponseWriter, r *http.Request) {
 		w.Write([]byte("Hello World!"))
 	})
+	fmt.Println("Server is starting on port: ", configs.WebServerPort)
 
 	http.ListenAndServe("127.0.0.1:"+configs.WebServerPort, router)
 }
